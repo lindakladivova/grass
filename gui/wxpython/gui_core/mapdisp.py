@@ -27,6 +27,7 @@ import wx
 from core.debug import Debug
 from gui_core.toolbars import ToolSwitcher
 from gui_core.wrap import NewId
+from mapdisp import statusbar as sb
 
 from grass.script import core as grass
 
@@ -314,6 +315,58 @@ class MapPanelBase(wx.Panel):
             if self.statusbarManager.GetMode() == 0:
                 self.statusbarManager.ShowItem("coordinates")
 
+    def CreateStatusbar(self, statusbarItems):
+        """Create statusbar (default items)."""
+        # create statusbar and its manager
+        statusbar = wx.StatusBar(self, id=wx.ID_ANY)
+        statusbar.SetMinHeight(24)
+        statusbar.SetFieldsCount(4)
+        statusbar.SetStatusWidths([-5, -2, -1, -1])
+        self.statusbarManager = sb.SbManager(mapframe=self, statusbar=statusbar)
+
+        # fill statusbar manager
+        self.statusbarManager.AddStatusbarItemsByClass(
+            statusbarItems, mapframe=self, statusbar=statusbar
+        )
+        self.statusbarManager.AddStatusbarItem(
+            sb.SbMask(self, statusbar=statusbar, position=2)
+        )
+        self.statusbarManager.AddStatusbarItem(
+            sb.SbRender(self, statusbar=statusbar, position=3)
+        )
+        self.statusbarManager.Update()
+        return statusbar
+
+    def AddStatusbarPane(self):
+        """Add statusbar as a pane"""
+        self._mgr.AddPane(
+            self.statusbar,
+            wx.aui.AuiPaneInfo()
+            .Bottom()
+            .MinSize(30, 30)
+            .Fixed()
+            .Name("statusbar")
+            .CloseButton(False)
+            .DestroyOnClose(True)
+            .ToolbarPane()
+            .Dockable(False)
+            .PaneBorder(False)
+            .Gripper(False),
+        )
+
+    def SetStatusText(self, *args):
+        """Overide wx.StatusBar method"""
+        self.statusbar.SetStatusText(*args)
+
+    def ShowStatusbar(self, show):
+        """Show/hide statusbar and associated pane"""
+        self._mgr.GetPane("statusbar").Show(show)
+        self._mgr.Update()
+
+    def IsStatusbarShown(self):
+        """Check if statusbar is shown"""
+        return self._mgr.GetPane("statusbar").IsShown()
+
     def StatusbarReposition(self):
         """Reposition items in statusbar"""
         if self.statusbarManager:
@@ -323,6 +376,51 @@ class MapPanelBase(wx.Panel):
         """Enable/disable toolbars long help"""
         for toolbar in six.itervalues(self.toolbars):
             toolbar.EnableLongHelp(enable)
+
+    def ShowAllToolbars(self, show=True):
+        if not show:  # hide
+            action = self.RemoveToolbar
+        else:
+            action = self.AddToolbar
+        for toolbar in self.GetToolbarNames():
+            action(toolbar)
+
+    def AreAllToolbarsShown(self):
+        return self.GetMapToolbar().IsShown()
+
+    def GetToolbarNames(self):
+        """Return toolbar names"""
+        return self.toolbars.keys()
+
+    def AddToolbar(self):
+        """Add defined toolbar to the window"""
+        raise NotImplementedError("AddToolbar")
+
+    def RemoveToolbar(self, name, destroy=False):
+        """Removes defined toolbar from the window
+
+        :param name toolbar to remove
+        :param destroy True to destroy otherwise toolbar is only hidden
+        """
+        self._mgr.DetachPane(self.toolbars[name])
+        if destroy:
+            self._toolSwitcher.RemoveToolbarFromGroup("mouseUse", self.toolbars[name])
+            self.toolbars[name].Destroy()
+            self.toolbars.pop(name)
+        else:
+            self.toolbars[name].Hide()
+
+        self._mgr.Update()
+
+    def IsPaneShown(self, name):
+        """Check if pane (toolbar, mapWindow ...) of given name is currently shown"""
+        if self._mgr.GetPane(name).IsOk():
+            return self._mgr.GetPane(name).IsShown()
+        return False
+
+    def IsStandalone(self):
+        """Check if map panel is standalone"""
+        raise NotImplementedError("IsStandalone")
 
     def OnRender(self, event):
         """Re-render map composition (each map layer)"""
@@ -703,8 +801,20 @@ class FrameMixin:
     def SetFocus(self):
         self.GetParent().SetFocus()
 
+    def CenterOnScreen(self):
+        self.GetParent().CenterOnScreen()
+
+    def CentreOnScreen(self):
+        self.GetParent().CentreOnScreen()
+
     def IsFullScreen(self):
         return self.GetParent().IsFullScreen()
+
+    def IsIconized(self):
+        self.GetParent().IsIconized()
+
+    def Maximize(self):
+        self.GetParent().Maximize()
 
     def ShowFullScreen(self, show):
         for toolbar in self.toolbars.keys():
