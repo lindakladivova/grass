@@ -496,7 +496,7 @@ class GConsole(wx.EvtHandler):
             return
 
         # update history file, command prompt history and history model
-        self._giface.updateHistory.emit(cmd=cmd_save_to_history)
+        self._giface.addEntryToHistory.emit(cmd=cmd_save_to_history)
 
         if command[0] in globalvar.grassCmd:
             # send GRASS command without arguments to GUI command interface

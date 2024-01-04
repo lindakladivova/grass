@@ -17,15 +17,18 @@ for details.
 
 import wx
 import re
+import copy
 
 from core import globalvar
 from core.gcmd import GError, GException
 from gui_core.forms import GUI
 from gui_core.treeview import CTreeView
 from gui_core.wrap import Menu
-from history.tree import HistoryBrowserTree
+from core.treemodel import TreeModel, ModuleNode
 
 from grass.pydispatch.signal import Signal
+
+from grass.grassdb.history import read_history, get_current_mapset_gui_history_path
 
 
 class HistoryBrowser(wx.Panel):
@@ -54,10 +57,9 @@ class HistoryBrowser(wx.Panel):
         self._createTree()
 
         self._giface.currentMapsetChanged.connect(self.UpdateHistoryModelFromScratch)
-        self._giface.updateHistory.connect(
+        self._giface.addEntryToHistory.connect(
             lambda cmd: self.UpdateHistoryModelByCommand(cmd)
         )
-
         self._layout()
 
     def _layout(self):
@@ -73,8 +75,10 @@ class HistoryBrowser(wx.Panel):
 
     def _createTree(self):
         """Create tree based on the model"""
-        self._model = HistoryBrowserTree()
+        self._model = TreeModel(ModuleNode)
+        self._fillModel()
         self._tree = self._getTreeInstance()
+        self._refreshTree()
         self._tree.SetToolTip(_("Double-click to open the tool"))
         self._tree.selectionChanged.connect(self.OnItemSelected)
         self._tree.itemActivated.connect(lambda node: self.Run(node))
@@ -88,7 +92,7 @@ class HistoryBrowser(wx.Panel):
         return res
 
     def _getTreeInstance(self):
-        return CTreeView(model=self._model.GetModel(), parent=self)
+        return CTreeView(model=self._getModel(), parent=self)
 
     def _getSelectedNode(self):
         selection = self._tree.GetSelected()
@@ -107,47 +111,56 @@ class HistoryBrowser(wx.Panel):
         self.PopupMenu(menu)
         menu.Destroy()
 
+    def _getModel(self):
+        """Returns a deep copy of the model."""
+        return copy.deepcopy(self._model)
+
     def _refreshTree(self):
-        self._tree.SetModel(self._model.GetModel())
+        self._tree.SetModel(self._getModel())
+
+    def _fillModel(self):
+        """Fill tree history model based on the current history log from scratch."""
+        self._model.RemoveNode(self._model.root)
+        self._history_path = get_current_mapset_gui_history_path()
+        if self._history_path:
+            cmd_list = read_history(self._history_path)
+            for label in cmd_list:
+                data = {"command": label.strip()}
+                self._model.AppendNode(
+                    parent=self._model.root,
+                    label=data["command"],
+                    data=data,
+                )
 
     def UpdateHistoryModelFromScratch(self):
-        """Update the model from scratch and refresh the tree"""
-        self._model.CreateModel()
+        """Update tree history model based on the current history log from scratch."""
+        self._fillModel()
         self._refreshTree()
 
-    def UpdateHistoryModelByCommand(self, cmd=None, node=None, update="add"):
-        """Update the model by the command and refresh the tree
+    def UpdateHistoryModelByCommand(self, label):
+        """Update the model by the command and refresh the tree.
 
-        :param str|Node cmd: model node label if update param arg is add
-        :param str update: type of model update operation add|delete
-                           model node
-        :param object|None node: selected tree node object instance if
-                                 update param arg is delete
-        """
-        self._model.UpdateModel(cmd, update, node)
+        :param label: model node label"""
+        data = {"command": label}
+        self._model.AppendNode(
+            parent=self._model.root,
+            label=data["command"],
+            data=data,
+        )
         self._refreshTree()
 
     def OnDeleteCmd(self, event):
         """Delete cmd from the history file"""
-        node = self._getSelectedNode()
-        cmd = node.data["command"]
+        tree_node = self._getSelectedNode()
+        cmd = tree_node.data["command"]
         question = _("Do you really want to delete <{}> command?").format(cmd)
         if self._confirmDialog(question, title=_("Delete command")) == wx.ID_YES:
             self.showNotification.emit(message=_("Deleting <{}>").format(cmd))
-            try:
-                self._model.DeleteEntryFromHistory(node=node)
-            except OSError as e:
-                GError(
-                    parent=self,
-                    message=f"{e} {e.__cause__}",
-                    caption=_("Cannot update history file"),
-                    showTraceback=False,
-                )
-                return
-            self.UpdateHistoryModelByCommand(
-                update="delete",
-                node=node,
-            )
+            model_tuple = self._model.GetIndexOfNode(tree_node)
+            model_node = self._model.GetNodeByIndex(model_tuple)
+            self._giface.removeEntryFromHistory.emit(index=model_tuple[0])
+            self._model.RemoveNode(model_node)
+            self._refreshTree()
             self.showNotification.emit(message=_("<{}> deleted").format(cmd))
 
     def OnItemSelected(self, node):

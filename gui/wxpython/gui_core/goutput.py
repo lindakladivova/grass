@@ -29,7 +29,8 @@ from grass.pydispatch.signal import Signal
 from grass.grassdb.history import (
     read_history,
     create_history_file,
-    update_history,
+    add_entry_to_history,
+    remove_entry_from_history,
     copy_history,
     get_current_mapset_gui_history_path,
 )
@@ -150,11 +151,19 @@ class GConsoleWindow(wx.SplitterWindow):
             self.giface.currentMapsetChanged.connect(self._loadHistory)
 
         if self._gcstyle == GC_PROMPT:
-            # connect update history signal only for main Console Window
-            self.giface.updateHistory.connect(
-                lambda cmd: self.cmdPrompt.UpdateCmdHistory(cmd)
+            # connect update history signals only for main Console Window
+            self.giface.addEntryToHistory.connect(
+                lambda cmd: self.cmdPrompt.AddEntryToCmdHistory(cmd)
             )
-            self.giface.updateHistory.connect(lambda cmd: self.UpdateHistory(cmd))
+            self.giface.removeEntryFromHistory.connect(
+                lambda index: self.cmdPrompt.RemoveEntryFromCmdHistory(index)
+            )
+            self.giface.addEntryToHistory.connect(
+                lambda cmd: self.AddEntryToHistory(cmd)
+            )
+            self.giface.removeEntryFromHistory.connect(
+                lambda index: self.RemoveEntryFromHistory(index)
+            )
 
         # buttons
         self.btnClear = ClearButton(parent=self.panelPrompt)
@@ -448,11 +457,19 @@ class GConsoleWindow(wx.SplitterWindow):
         self.progressbar.SetValue(event.value)
         event.Skip()
 
-    def UpdateHistory(self, cmd):
-        """Update command history"""
+    def AddEntryToHistory(self, cmd):
+        """Add entry to command history log"""
         history_path = get_current_mapset_gui_history_path()
         try:
-            update_history(cmd, history_path)
+            add_entry_to_history(cmd, history_path)
+        except OSError as e:
+            GError(str(e))
+
+    def RemoveEntryFromHistory(self, del_line_number):
+        """Remove entry from command history log"""
+        history_path = get_current_mapset_gui_history_path()
+        try:
+            remove_entry_from_history(del_line_number, history_path)
         except OSError as e:
             GError(str(e))
 
