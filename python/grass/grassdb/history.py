@@ -18,14 +18,10 @@ import grass.script as gs
 from grass.script.utils import parse_key_val
 
 
-# global node type variables
-type_time_period = _("time_period")
-type_command = _("command")
-
 # global status variables
 status_aborted = _("aborted")
 status_failed = _("failed")
-status_in_process = _("in process")
+status_running = _("running")
 status_success = _("success")
 status_unknown = _("unknown")
 
