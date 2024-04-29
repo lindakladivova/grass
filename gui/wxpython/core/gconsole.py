@@ -736,15 +736,15 @@ class GConsole(wx.EvtHandler):
                 )
             )
             msg = _("Command aborted")
-            status = "aborted"
+            status = history.status_aborted
         elif event.returncode != 0:
             msg = _("Command ended with non-zero return code {returncode}").format(
                 returncode=event.returncode
             )
-            status = "failed"
+            status = history.status_failed
         else:
             msg = _("Command finished")
-            status = "success"
+            status = history.status_success
 
         cmd_info = {"runtime": int(ctime), "status": status}
 

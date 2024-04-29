@@ -108,6 +108,17 @@ class HistoryBrowserTree(CTreeView):
 
         self._resetSelectVariables()
 
+        self._iconTypes = [
+            history.type_time_period,
+            history.status_aborted,
+            history.status_failed,
+            history.status_in_process,
+            history.status_success,
+            history.status_unknown,
+        ]
+
+        self._initImages()
+
         self._initHistoryModel()
 
         self.showNotification = Signal("HistoryBrowserTree.showNotification")
@@ -306,7 +317,7 @@ class HistoryBrowserTree(CTreeView):
         self._resetSelectVariables()
         for item in selected:
             type = item.data["type"]
-            if type == "command":
+            if type == history.type_command:
                 self.selected_command.append(item)
                 self.selected_day.append(item.parent)
             elif type == "day":
@@ -323,7 +334,7 @@ class HistoryBrowserTree(CTreeView):
             except re.error:
                 return
             self._model = self._orig_model.Filtered(
-                method="filtering", name=compiled, type="command"
+                method="filtering", name=compiled, type=history.type_command
             )
         else:
             self._model = self._orig_model
@@ -361,7 +372,7 @@ class HistoryBrowserTree(CTreeView):
         command_node = self._model.AppendNode(
             parent=today_node,
             data=dict(
-                type="command",
+                type=history.type_command,
                 name=entry["command"].strip(),
                 timestamp=entry["command_info"]["timestamp"],
                 status=entry["command_info"].get("status", "in process"),
@@ -388,7 +399,9 @@ class HistoryBrowserTree(CTreeView):
         today_node = self._model.SearchNodes(
             parent=self._model.root, day=today, type="day"
         )[0]
-        command_nodes = self._model.SearchNodes(parent=today_node, type="command")
+        command_nodes = self._model.SearchNodes(
+            parent=today_node, type=history.type_command
+        )
         last_node = command_nodes[-1]
 
         # Remove last node
@@ -432,6 +445,17 @@ class HistoryBrowserTree(CTreeView):
                 caption=_("Cannot be parsed into command"),
                 showTraceback=False,
             )
+
+    def OnGetItemImage(self, index, which=wx.TreeItemIcon_Normal, column=0):
+        """Overridden method to return image for each item."""
+        node = self._model.GetNodeByIndex(index)
+        try:
+            if node.data["type"] == history.type_time_period:
+                return self._iconTypes.index(node.data["type"])
+            elif node.data["type"] == history.type_command:
+                return self._iconTypes.index(node.data["status"])
+        except ValueError:
+            return 0
 
     def OnRemoveCmd(self, event):
         """Remove cmd from the history file"""
