@@ -144,16 +144,33 @@ class HistoryBrowserTree(CTreeView):
         self.itemActivated.connect(self.OnDoubleClick)
         self.contextMenu.connect(self.OnRightClick)
 
-    def _sortDays(self):
-        """Sort day nodes from earliest to oldest."""
+    def _sortNodes(self):
+        """Sort day and command nodes from earliest to oldest."""
         if self._model.root.children:
+            # Sort day nodes by day (from earliest to oldest)
             self._model.root.children.sort(
                 key=lambda node: node.data["day"], reverse=True
             )
+            # Sort commands within each day node by timestamp
+            for day_node in self._model.root.children:
+                if day_node.children:
+                    # Filter out nodes with None timestamp (Missing info nodes)
+                    valid_commands = [
+                        node
+                        for node in day_node.children
+                        if node.data.get("timestamp") is not None
+                    ]
+                    print(valid_commands)
+                    # Sort valid commands by timestamp
+                    if valid_commands:
+                        print("sorting")
+                        day_node.children.sort(
+                            key=lambda node: node.data["timestamp"], reverse=True
+                        )
 
     def _refreshTree(self):
         """Refresh tree models"""
-        self._sortDays()
+        self._sortNodes()
         self.SetModel(copy.deepcopy(self._model))
         self._orig_model = self._model
 
@@ -422,10 +439,10 @@ class HistoryBrowserTree(CTreeView):
             parent=self._model.root, day=today, type=TIME_PERIOD
         )[0]
         command_nodes = self._model.SearchNodes(parent=today_node, type=COMMAND)
-        last_node = command_nodes[-1]
+        first_node = command_nodes[0]
 
         # Remove last node
-        self._model.RemoveNode(last_node)
+        self._model.RemoveNode(first_node)
 
         # Add new command node to the model
         self.InsertCommand(entry)
